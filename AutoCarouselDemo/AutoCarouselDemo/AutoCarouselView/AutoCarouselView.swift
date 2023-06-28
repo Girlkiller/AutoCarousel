@@ -76,11 +76,13 @@ public class AutoCarouselView: UIStackView {
         }
     }
     
-    private var style: Style = AutoCarouselView.defaultAutoCarouselViewStyle {
+    public private(set) var style: Style = AutoCarouselView.defaultAutoCarouselViewStyle {
         didSet {
             applyStyling()
         }
     }
+    
+    private var delay: TimeInterval
     
     private var timer: Timer?
     private var isReversed = false
@@ -92,7 +94,7 @@ public class AutoCarouselView: UIStackView {
         return delegate?.numberOfCells() ?? 0
     }
     
-    private var index: Int = 0
+    public private(set) var index: Int = 0
     private var preIndex: Int {
         var computedIndex = index - 1
         if computedIndex < 0 {
@@ -114,6 +116,7 @@ public class AutoCarouselView: UIStackView {
     private var typeMap: [String: UIView.Type] = [:]
     
     public override init(frame: CGRect) {
+        delay = style.delay
         super.init(frame: frame)
         setupViews()
         addGestures()
@@ -202,6 +205,7 @@ public class AutoCarouselView: UIStackView {
         direction = style.direction
         transition.duration = style.duration
         transition.timingFunction = style.animationOption.timingFunction
+        delay = style.delay
     }
     
     private func applyTransitionDirection(_ direction: AutoCarouselDirection) {
@@ -261,7 +265,7 @@ extension AutoCarouselView {
 extension AutoCarouselView {
     func startTimer() {
         stopTimer()
-        let timer = Timer(timeInterval: style.delay, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: delay, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             self.startAnimation(self.direction)
         }
@@ -384,6 +388,7 @@ extension AutoCarouselView {
 
 extension AutoCarouselView {
     public func startAnimation(_ direction: AutoCarouselDirection, shouldRestart: Bool = false) {
+        var delay = delay
         containerView.gestureRecognizers?.forEach { $0.isEnabled = false }
         applyTransitionDirection(direction)
         prepareContent(for: direction)
@@ -396,8 +401,11 @@ extension AutoCarouselView {
             nextAnimationView.frame = CGRect(origin: nextTransitionFromPoint(for: direction), size: size)
         }
         CATransaction.setCompletionBlock { [weak self] in
-            self?.containerView.gestureRecognizers?.forEach { $0.isEnabled = true }
-            guard let self = self, self.isInfinited, shouldRestart else { return }
+            guard let self = self else { return }
+            self.containerView.gestureRecognizers?.forEach { $0.isEnabled = true }
+            let shouldRestart = shouldRestart || delay != self.delay
+            self.style = self.style.withDelay(delay)
+            guard self.isInfinited, shouldRestart else { return }
             self.startTimer()
         }
         preAnimationView.layer.add(transition, forKey: nil)
@@ -412,7 +420,8 @@ extension AutoCarouselView {
         isReversed = !isReversed
         updateIndex(with: direction)
         pageControl.currentPage = index
-        print("------- curent index = \(index)")
+        delay = delegate?.carouselView(self, delayForIndex: index) ?? delay
+        print("\(Date())------- curent index = \(index)")
     }
 
     private func preTransitionToPoint(for direction: AutoCarouselDirection) -> CGPoint {

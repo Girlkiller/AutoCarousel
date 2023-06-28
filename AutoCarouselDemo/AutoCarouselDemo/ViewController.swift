@@ -67,4 +67,8 @@ extension AutoCarouselViewController: AutoCarouselViewDelegate {
     func carouselView(_ carouselView: AutoCarouselView, didSelectCell cell: UIView?, atIndex index: Int) {
         print("carouselView didSelectCell index \(index)")
     }
+    
+    func carouselView(_ carouselView: AutoCarouselView, delayForIndex index: Int) -> TimeInterval {
+        return TimeInterval(index + 1)
+    }
 }

@@ -11,4 +11,11 @@ public protocol AutoCarouselViewDelegate: AnyObject {
     func numberOfCells() -> Int
     func carouselView(_ carouselView: AutoCarouselView, cellForIndex index: Int) -> UIView?
     func carouselView(_ carouselView: AutoCarouselView, didSelectCell cell: UIView?, atIndex index: Int)
+    func carouselView(_ carouselView: AutoCarouselView, delayForIndex index: Int) -> TimeInterval
+}
+
+extension AutoCarouselViewDelegate {
+    func carouselView(_ carouselView: AutoCarouselView, delayForIndex index: Int) -> TimeInterval {
+        carouselView.style.delay
+    }
 }
