@@ -27,6 +27,7 @@ public class AutoCarouselView: UIStackView {
         let view = UIView(frame: .zero)
         view.translatesAutoresizingMaskIntoConstraints = false
         view.accessibilityIdentifier = AccessibilityIdentifiers.animationContainer
+        view.clipsToBounds = true
         return view
     }()
     
@@ -35,7 +36,7 @@ public class AutoCarouselView: UIStackView {
         stackView.translatesAutoresizingMaskIntoConstraints = false
         stackView.axis = .horizontal
         stackView.distribution = .fill
-        stackView.backgroundColor = .orange
+        stackView.backgroundColor = .clear
         stackView.accessibilityIdentifier = AccessibilityIdentifiers.preAnimationView
         stackView.tag = 0
         return stackView
@@ -46,7 +47,7 @@ public class AutoCarouselView: UIStackView {
         stackView.translatesAutoresizingMaskIntoConstraints = false
         stackView.axis = .horizontal
         stackView.distribution = .fill
-        stackView.backgroundColor = .green
+        stackView.backgroundColor = .clear
         stackView.accessibilityIdentifier = AccessibilityIdentifiers.nextAnimationView
         stackView.tag = 1
         return stackView
