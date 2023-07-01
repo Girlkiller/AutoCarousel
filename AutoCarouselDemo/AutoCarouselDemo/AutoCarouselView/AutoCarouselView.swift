@@ -20,7 +20,7 @@ public class AutoCarouselView: UIStackView {
         static let preAnimationName = "preAnimationView.position"
         static let nextAnimationName = "nextAnimationView.position"
         
-        static let swipeVelocity: CGFloat = 500
+        static let swipeVelocity: CGFloat = 200
     }
     
     private lazy var containerView: UIView = {
@@ -115,6 +115,8 @@ public class AutoCarouselView: UIStackView {
     private var isInitialized = false
     private var reusableCells: [String: [UIView]] = [:]
     private var typeMap: [String: UIView.Type] = [:]
+    private var startPoint: CGPoint?
+    private var currentView: UIView?
     
     public override init(frame: CGRect) {
         delay = style.delay
@@ -164,15 +166,41 @@ public class AutoCarouselView: UIStackView {
         containerView.addSubview(nextAnimationView)
         containerView.addSubview(preAnimationView)
         containerView.addSubview(pageControl)
+        
+        switch direction {
+        case .fromLeft:
+            NSLayoutConstraint.activate([
+                nextAnimationView.trailingAnchor.constraint(equalTo: containerView.leadingAnchor),
+                nextAnimationView.topAnchor.constraint(equalTo: containerView.topAnchor),
+                nextAnimationView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
+            ])
+        case .fromRight:
+            NSLayoutConstraint.activate([
+                nextAnimationView.leadingAnchor.constraint(equalTo: containerView.trailingAnchor),
+                nextAnimationView.topAnchor.constraint(equalTo: containerView.topAnchor),
+                nextAnimationView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
+            ])
+            
+        case .fromTop:
+            NSLayoutConstraint.activate([
+                nextAnimationView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+                nextAnimationView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+                nextAnimationView.bottomAnchor.constraint(equalTo: containerView.topAnchor)
+            ])
+        case .fromBottom:
+            NSLayoutConstraint.activate([
+                nextAnimationView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+                nextAnimationView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+                nextAnimationView.topAnchor.constraint(equalTo: containerView.bottomAnchor)
+            ])
+        }
         NSLayoutConstraint.activate([
             preAnimationView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             preAnimationView.topAnchor.constraint(equalTo: containerView.topAnchor),
             preAnimationView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
             preAnimationView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            nextAnimationView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            nextAnimationView.topAnchor.constraint(equalTo: containerView.topAnchor),
-            nextAnimationView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
-            nextAnimationView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            nextAnimationView.widthAnchor.constraint(equalTo: preAnimationView.widthAnchor),
+            nextAnimationView.heightAnchor.constraint(equalTo: preAnimationView.heightAnchor),
             pageControl.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             pageControl.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
             pageControl.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
@@ -182,18 +210,11 @@ public class AutoCarouselView: UIStackView {
     
     func addGestures() {
         let tapGR = UITapGestureRecognizer(target: self, action: #selector(clickAction(tapGR:)))
+        tapGR.delegate = self
         containerView.addGestureRecognizer(tapGR)
-        let directions: [UISwipeGestureRecognizer.Direction] = [.right, .left, .up, .down]
-        directions.forEach {
-            addSwipeGesture(with: $0)
-        }
-    }
-    
-    func addSwipeGesture(with direction: UISwipeGestureRecognizer.Direction) {
-        let swiper = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipeGesture(_:)))
-        swiper.direction = direction
-        swiper.numberOfTouchesRequired = 1
-        containerView.addGestureRecognizer(swiper)
+        let panGR = UIPanGestureRecognizer(target: self, action: #selector(panAction(panGR:)))
+        panGR.delegate = self
+        containerView.addGestureRecognizer(panGR)
     }
 
     private func applyStyling() {
@@ -226,30 +247,6 @@ public class AutoCarouselView: UIStackView {
 // MARK: Gesture Handler
 extension AutoCarouselView {
     @objc
-    func handleSwipeGesture(_ swiper: UISwipeGestureRecognizer) {
-        switch swiper.direction {
-        case .down:
-            if direction == .fromBottom || direction == .fromTop {
-                startAnimation(.fromTop, shouldRestart: true)
-            }
-        case .up:
-            if direction == .fromBottom || direction == .fromTop {
-                startAnimation(.fromBottom, shouldRestart: true)
-            }
-        case .left:
-            if direction == .fromLeft || direction == .fromRight {
-                startAnimation(.fromRight, shouldRestart: true)
-            }
-        case .right:
-            if direction == .fromLeft || direction == .fromRight {
-                startAnimation(.fromLeft, shouldRestart: true)
-            }
-        default:
-            break
-        }
-    }
-    
-    @objc
     func clickAction(tapGR: UITapGestureRecognizer) {
         let touchPoint = tapGR.location(in: containerView)
         if preAnimationView.layer.presentation()?.hitTest(touchPoint) != nil {
@@ -258,6 +255,193 @@ extension AutoCarouselView {
         }
         if nextAnimationView.layer.presentation()?.hitTest(touchPoint) != nil {
             delegate?.carouselView(self, didSelectCell: nextAnimationView.arrangedSubviews.first, atIndex: nextAnimationView.tag)
+        }
+    }
+    
+    @objc
+    func panAction(panGR: UIPanGestureRecognizer) {
+        let isHorizontalDirection = direction == .fromLeft || direction == .fromRight
+        switch panGR.state {
+        case .began:
+            stopTimer()
+            let direction: AutoCarouselDirection
+            if isHorizontalDirection {
+                let velocity = panGR.velocity(in: containerView).x
+                direction = velocity > 0 ? .fromLeft : .fromRight
+            } else {
+                let velocity = panGR.velocity(in: containerView).y
+                direction = velocity > 0 ? .fromTop : .fromBottom
+            }
+            currentView = containerView.subviews.first(where: { $0.frame.origin == .zero && $0 is UIStackView })
+            startPoint = nextTransitionFromPoint(for: direction)
+        case .changed:
+            if isHorizontalDirection {
+                handleHorizontalChangedAction(panGR)
+            } else {
+                handleVerticalChangedAction(panGR)
+            }
+        case .cancelled:
+            handlePanAction(panGR)
+        case .ended:
+            handlePanAction(panGR)
+        default:
+            break
+        }
+    }
+    
+    private func handlePanAction(_ panGR: UIPanGestureRecognizer) {
+        let isHorizontalDirection = direction == .fromLeft || direction == .fromRight
+        if isHorizontalDirection {
+            handleHorizontalPan(panGR)
+        } else {
+            handleVerticalPan(panGR)
+        }
+        panGR.setTranslation(.zero, in: containerView)
+    }
+    
+    private func handleHorizontalPan(_ panGR: UIPanGestureRecognizer) {
+        let velocity = panGR.velocity(in: containerView).x
+        let translation = panGR.translation(in: containerView).x
+        let size = containerView.bounds.size
+        if abs(velocity) >= Constants.swipeVelocity {
+            let direction: AutoCarouselDirection = velocity > 0 ? .fromLeft : .fromRight
+            startAnimation(direction, shouldRestart: true)
+        } else if abs(translation) >= size.width/2 {
+            let direction: AutoCarouselDirection = translation > 0 ? .fromLeft : .fromRight
+            startAnimation(direction, shouldRestart: true)
+        } else {
+            recoverHorizontalLocation()
+        }
+    }
+    
+    private func handleVerticalPan(_ panGR: UIPanGestureRecognizer) {
+        let velocity = panGR.velocity(in: containerView).y
+        let translation = panGR.translation(in: containerView).y
+        let size = containerView.bounds.size
+        if abs(velocity) >= Constants.swipeVelocity {
+            let direction: AutoCarouselDirection = velocity > 0 ? .fromTop : .fromBottom
+            startAnimation(direction, shouldRestart: true)
+        } else if abs(translation) >= size.height/2 {
+            let direction: AutoCarouselDirection = translation > 0 ? .fromTop : .fromBottom
+            startAnimation(direction, shouldRestart: true)
+        } else {
+            recoverVerticalLocation()
+        }
+    }
+    
+    private func handleHorizontalChangedAction(_ panGR: UIPanGestureRecognizer) {
+        let velocity = panGR.velocity(in: containerView).x
+        guard abs(velocity) > 0,
+              let startPoint = startPoint,
+              let currentView = currentView else {
+                  return
+              }
+        let translation = panGR.translation(in: containerView).x
+        let size = containerView.bounds.size
+        if currentView == preAnimationView {
+            preAnimationView.frame = CGRect(origin: CGPoint(x: translation, y: 0), size: size)
+            nextAnimationView.frame = CGRect(origin: CGPoint(x: startPoint.x + translation, y: 0), size: size)
+        } else {
+            nextAnimationView.frame = CGRect(origin: CGPoint(x: translation, y: 0), size: size)
+            preAnimationView.frame = CGRect(origin: CGPoint(x: startPoint.x + translation, y: 0), size: size)
+        }
+        if abs(translation) >= size.width/2 {
+            handleHorizontalPan(panGR)
+            panGR.isEnabled = false
+            panGR.isEnabled = true
+        }
+    }
+    
+    private func handleVerticalChangedAction(_ panGR: UIPanGestureRecognizer) {
+        let velocity = panGR.velocity(in: containerView).y
+        guard abs(velocity) > 0,
+              let startPoint = startPoint,
+              let currentView = currentView else {
+                  return
+              }
+        let translation = panGR.translation(in: containerView).y
+        let size = containerView.bounds.size
+        if currentView == preAnimationView {
+            preAnimationView.frame = CGRect(origin: CGPoint(x: 0, y: translation), size: size)
+            nextAnimationView.frame = CGRect(origin: CGPoint(x: 0, y: startPoint.y + translation), size: size)
+        } else {
+            nextAnimationView.frame = CGRect(origin: CGPoint(x: 0, y: translation), size: size)
+            preAnimationView.frame = CGRect(origin: CGPoint(x: 0, y: startPoint.y + translation), size: size)
+        }
+        if abs(translation) >= size.height/2 {
+            handleVerticalPan(panGR)
+            panGR.isEnabled = false
+            panGR.isEnabled = true
+        }
+    }
+    
+    private func recoverHorizontalLocation() {
+        guard let currentView = currentView else {
+            startPoint = nil
+            currentView = nil
+            return
+        }
+        let size = containerView.bounds.size
+        let isPreAnimationView = currentView == preAnimationView
+        UIView.animate(withDuration: style.duration, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 10) {
+            if isPreAnimationView {
+                self.preAnimationView.frame = CGRect(origin: .zero, size: size)
+                let isNextAtLeft = self.preAnimationView.frame.minX > self.nextAnimationView.frame.minX
+                if isNextAtLeft {
+                    self.nextAnimationView.frame = CGRect(origin: CGPoint(x: -size.width, y: 0), size: size)
+                } else {
+                    self.nextAnimationView.frame = CGRect(origin: CGPoint(x: size.width, y: 0), size: size)
+                }
+            } else {
+                self.nextAnimationView.frame = CGRect(origin: .zero, size: size)
+                let isPreAtLeft = self.nextAnimationView.frame.minX > self.preAnimationView.frame.minX
+                if isPreAtLeft {
+                    self.preAnimationView.frame = CGRect(origin: CGPoint(x: -size.width, y: 0), size: size)
+                } else {
+                    self.preAnimationView.frame = CGRect(origin: CGPoint(x: size.width, y: 0), size: size)
+                }
+            }
+        } completion: { _ in
+            self.startPoint = nil
+            self.currentView = nil
+            if self.isInfinited {
+                self.startTimer()
+            }
+        }
+    }
+    
+    private func recoverVerticalLocation() {
+        guard let currentView = currentView else {
+            startPoint = nil
+            currentView = nil
+            return
+        }
+        let size = containerView.bounds.size
+        let isPreAnimationView = currentView == preAnimationView
+        UIView.animate(withDuration: style.duration, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 10) {
+            if isPreAnimationView {
+                self.preAnimationView.frame = CGRect(origin: .zero, size: size)
+                let isNextAtTop = self.preAnimationView.frame.minY > self.nextAnimationView.frame.minY
+                if isNextAtTop {
+                    self.nextAnimationView.frame = CGRect(origin: CGPoint(x: 0, y: -size.height), size: size)
+                } else {
+                    self.nextAnimationView.frame = CGRect(origin: CGPoint(x: 0, y: size.height), size: size)
+                }
+            } else {
+                self.nextAnimationView.frame = CGRect(origin: .zero, size: size)
+                let isPreAtTop = self.nextAnimationView.frame.minY > self.preAnimationView.frame.minY
+                if isPreAtTop {
+                    self.preAnimationView.frame = CGRect(origin: CGPoint(x: 0, y: -size.height), size: size)
+                } else {
+                    self.preAnimationView.frame = CGRect(origin: CGPoint(x: 0, y: size.height), size: size)
+                }
+            }
+        } completion: { _ in
+            self.startPoint = nil
+            self.currentView = nil
+            if self.isInfinited {
+                self.startTimer()
+            }
         }
     }
 }
@@ -290,6 +474,7 @@ extension AutoCarouselView {
         isReversed = false
         isInitialized = false
         pageControl.numberOfPages = numberOfPages
+        pageControl.isHidden = true
         prepareInitialContent()
         startTimer()
     }
@@ -394,15 +579,18 @@ extension AutoCarouselView {
         applyTransitionDirection(direction)
         prepareContent(for: direction)
         let size = containerView.bounds.size
+        let isMoving = startPoint != nil
         if isReversed {
-            preAnimationView.frame = CGRect(origin: nextTransitionFromPoint(for: direction), size: size)
-            nextAnimationView.frame = CGRect(origin: .zero, size: size)
+            preAnimationView.frame = isMoving ? preAnimationView.frame : CGRect(origin: nextTransitionFromPoint(for: direction), size: size)
+            nextAnimationView.frame = isMoving ? nextAnimationView.frame : CGRect(origin: .zero, size: size)
         } else {
-            preAnimationView.frame = CGRect(origin: .zero, size: size)
-            nextAnimationView.frame = CGRect(origin: nextTransitionFromPoint(for: direction), size: size)
+            preAnimationView.frame = isMoving ? preAnimationView.frame : CGRect(origin: .zero, size: size)
+            nextAnimationView.frame = isMoving ? nextAnimationView.frame : CGRect(origin: nextTransitionFromPoint(for: direction), size: size)
         }
         CATransaction.setCompletionBlock { [weak self] in
             guard let self = self else { return }
+            self.startPoint = nil
+            self.currentView = nil
             self.containerView.gestureRecognizers?.forEach { $0.isEnabled = true }
             let shouldRestart = shouldRestart || delay != self.delay
             self.style = self.style.withDelay(delay)
@@ -457,5 +645,18 @@ extension AutoCarouselView {
             point = CGPoint(x: 0, y: height)
         }
         return point
+    }
+}
+
+extension AutoCarouselView: UIGestureRecognizerDelegate {
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        if containerView.gestureRecognizers?.contains(gestureRecognizer) == true {
+            return true
+        }
+        return false
+    }
+    
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true
     }
 }
