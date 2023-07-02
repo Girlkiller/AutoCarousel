@@ -117,6 +117,7 @@ public class AutoCarouselView: UIStackView {
     private var typeMap: [String: UIView.Type] = [:]
     private var startPoint: CGPoint?
     private var currentView: UIView?
+    private var startDirection: AutoCarouselDirection?
     
     public override init(frame: CGRect) {
         delay = style.delay
@@ -237,9 +238,9 @@ public class AutoCarouselView: UIStackView {
         case .fromRight:
             transition.subtype = .fromRight
         case .fromTop:
-            transition.subtype = .fromTop
-        case .fromBottom:
             transition.subtype = .fromBottom
+        case .fromBottom:
+            transition.subtype = .fromTop
         }
     }
 }
@@ -272,8 +273,10 @@ extension AutoCarouselView {
                 let velocity = panGR.velocity(in: containerView).y
                 direction = velocity > 0 ? .fromTop : .fromBottom
             }
+            prepareContent(for: direction)
             currentView = containerView.subviews.first(where: { $0.frame.origin == .zero && $0 is UIStackView })
             startPoint = nextTransitionFromPoint(for: direction)
+            startDirection = direction
         case .changed:
             if isHorizontalDirection {
                 handleHorizontalChangedAction(panGR)
@@ -296,7 +299,6 @@ extension AutoCarouselView {
         } else {
             handleVerticalPan(panGR)
         }
-        panGR.setTranslation(.zero, in: containerView)
     }
     
     private func handleHorizontalPan(_ panGR: UIPanGestureRecognizer) {
@@ -312,6 +314,7 @@ extension AutoCarouselView {
         } else {
             recoverHorizontalLocation()
         }
+        panGR.setTranslation(.zero, in: containerView)
     }
     
     private func handleVerticalPan(_ panGR: UIPanGestureRecognizer) {
@@ -327,17 +330,27 @@ extension AutoCarouselView {
         } else {
             recoverVerticalLocation()
         }
+        panGR.setTranslation(.zero, in: containerView)
     }
     
     private func handleHorizontalChangedAction(_ panGR: UIPanGestureRecognizer) {
         let velocity = panGR.velocity(in: containerView).x
+        let movingDirection: AutoCarouselDirection = velocity > 0 ? .fromLeft : .fromRight
+        let width = containerView.bounds.size.width
+        let isExceedBounds = preAnimationView.frame.minX < -width || preAnimationView.frame.minX > width ||
+                             nextAnimationView.frame.minX < -width || nextAnimationView.frame.minX > width
+        let size = containerView.bounds.size
+        if movingDirection != startDirection, isExceedBounds {
+            prepareContent(for: movingDirection)
+            startPoint = nextTransitionFromPoint(for: movingDirection)
+            startDirection = movingDirection
+        }
         guard abs(velocity) > 0,
               let startPoint = startPoint,
               let currentView = currentView else {
                   return
               }
         let translation = panGR.translation(in: containerView).x
-        let size = containerView.bounds.size
         if currentView == preAnimationView {
             preAnimationView.frame = CGRect(origin: CGPoint(x: translation, y: 0), size: size)
             nextAnimationView.frame = CGRect(origin: CGPoint(x: startPoint.x + translation, y: 0), size: size)
@@ -346,7 +359,6 @@ extension AutoCarouselView {
             preAnimationView.frame = CGRect(origin: CGPoint(x: startPoint.x + translation, y: 0), size: size)
         }
         if abs(translation) >= size.width/2 {
-            handleHorizontalPan(panGR)
             panGR.isEnabled = false
             panGR.isEnabled = true
         }
@@ -354,13 +366,22 @@ extension AutoCarouselView {
     
     private func handleVerticalChangedAction(_ panGR: UIPanGestureRecognizer) {
         let velocity = panGR.velocity(in: containerView).y
+        let movingDirection: AutoCarouselDirection = velocity > 0 ? .fromTop : .fromBottom
+        let height = containerView.bounds.size.height
+        let isExceedBounds = preAnimationView.frame.minY < -height || preAnimationView.frame.minY > height ||
+                             nextAnimationView.frame.minY < -height || nextAnimationView.frame.minY > height
+        let size = containerView.bounds.size
+        if movingDirection != startDirection, isExceedBounds {
+            prepareContent(for: movingDirection)
+            startPoint = nextTransitionFromPoint(for: movingDirection)
+            startDirection = movingDirection
+        }
         guard abs(velocity) > 0,
               let startPoint = startPoint,
               let currentView = currentView else {
                   return
               }
         let translation = panGR.translation(in: containerView).y
-        let size = containerView.bounds.size
         if currentView == preAnimationView {
             preAnimationView.frame = CGRect(origin: CGPoint(x: 0, y: translation), size: size)
             nextAnimationView.frame = CGRect(origin: CGPoint(x: 0, y: startPoint.y + translation), size: size)
@@ -369,7 +390,6 @@ extension AutoCarouselView {
             preAnimationView.frame = CGRect(origin: CGPoint(x: 0, y: startPoint.y + translation), size: size)
         }
         if abs(translation) >= size.height/2 {
-            handleVerticalPan(panGR)
             panGR.isEnabled = false
             panGR.isEnabled = true
         }
@@ -379,6 +399,7 @@ extension AutoCarouselView {
         guard let currentView = currentView else {
             startPoint = nil
             currentView = nil
+            startDirection = nil
             return
         }
         let size = containerView.bounds.size
@@ -404,6 +425,7 @@ extension AutoCarouselView {
         } completion: { _ in
             self.startPoint = nil
             self.currentView = nil
+            self.startDirection = nil
             if self.isInfinited {
                 self.startTimer()
             }
@@ -520,6 +542,7 @@ extension AutoCarouselView {
         }
         let isOpposite = isOppositeDirection(direction)
         let nextIndex = isOpposite ? preIndex : nextIndex
+        print("nextIndex = \(nextIndex)")
         guard let nextContent = delegate.carouselView(self, cellForIndex: nextIndex) else {
             return
         }
@@ -591,6 +614,7 @@ extension AutoCarouselView {
             guard let self = self else { return }
             self.startPoint = nil
             self.currentView = nil
+            self.startDirection = nil
             self.containerView.gestureRecognizers?.forEach { $0.isEnabled = true }
             let shouldRestart = shouldRestart || delay != self.delay
             self.style = self.style.withDelay(delay)

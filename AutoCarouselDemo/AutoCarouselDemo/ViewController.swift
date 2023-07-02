@@ -36,6 +36,7 @@ class AutoCarouselViewController: UIViewController {
         carouselView.pageControl.currentPageIndicatorTintColor = .white
         carouselView.updateStyle { style in
             style.withInset(NSDirectionalEdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
+                .withDirection(.fromBottom)
         }
         carouselView.delegate = self
         carouselView.translatesAutoresizingMaskIntoConstraints = false
@@ -69,6 +70,6 @@ extension AutoCarouselViewController: AutoCarouselViewDelegate {
     }
     
     func carouselView(_ carouselView: AutoCarouselView, delayForIndex index: Int) -> TimeInterval {
-        return TimeInterval(index + 1)
+        return 3//TimeInterval(index + 1)
     }
 }
