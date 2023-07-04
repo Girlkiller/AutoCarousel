@@ -310,7 +310,7 @@ extension AutoCarouselView {
             startAnimation(direction, shouldRestart: true)
         } else if abs(translation) >= size.width/2 {
             let direction: AutoCarouselDirection = translation > 0 ? .fromLeft : .fromRight
-            startAnimation(direction, shouldRestart: true)
+            startNormalAnimation(direction)
         } else {
             recoverHorizontalLocation()
         }
@@ -326,7 +326,7 @@ extension AutoCarouselView {
             startAnimation(direction, shouldRestart: true)
         } else if abs(translation) >= size.height/2 {
             let direction: AutoCarouselDirection = translation > 0 ? .fromTop : .fromBottom
-            startAnimation(direction, shouldRestart: true)
+            startNormalAnimation(direction)
         } else {
             recoverVerticalLocation()
         }
@@ -430,6 +430,34 @@ extension AutoCarouselView {
                 self.startTimer()
             }
         }
+    }
+    
+    private func startNormalAnimation(_ direction: AutoCarouselDirection) {
+        var delay = delay
+        let size = containerView.bounds.size
+        UIView.animate(withDuration: style.duration, delay: 0) {
+            if self.isReversed {
+                self.preAnimationView.frame = CGRect(origin: .zero, size: size)
+                self.nextAnimationView.frame = CGRect(origin: self.preTransitionToPoint(for: direction), size: size)
+            } else {
+                self.preAnimationView.frame = CGRect(origin: self.preTransitionToPoint(for: direction), size: size)
+                self.nextAnimationView.frame = CGRect(origin: .zero, size: size)
+            }
+        } completion: { [weak self] _ in
+            guard let self = self else { return }
+            self.startPoint = nil
+            self.currentView = nil
+            self.startDirection = nil
+            self.containerView.gestureRecognizers?.forEach { $0.isEnabled = true }
+            self.style = self.style.withDelay(delay)
+            guard self.isInfinited else { return }
+            self.startTimer()
+        }
+        isReversed = !isReversed
+        updateIndex(with: direction)
+        pageControl.currentPage = index
+        delay = delegate?.carouselView(self, delayForIndex: index) ?? delay
+        print("\(Date())------- curent index = \(index)")
     }
     
     private func recoverVerticalLocation() {
@@ -598,11 +626,17 @@ extension AutoCarouselView {
 extension AutoCarouselView {
     public func startAnimation(_ direction: AutoCarouselDirection, shouldRestart: Bool = false) {
         var delay = delay
-        containerView.gestureRecognizers?.forEach { $0.isEnabled = false }
+        containerView.gestureRecognizers?.forEach {
+            if $0 is UIPanGestureRecognizer {
+                $0.isEnabled = false
+            }
+        }
         applyTransitionDirection(direction)
-        prepareContent(for: direction)
-        let size = containerView.bounds.size
         let isMoving = startPoint != nil
+        if isMoving == false {
+            prepareContent(for: direction)
+        }
+        let size = containerView.bounds.size
         if isReversed {
             preAnimationView.frame = isMoving ? preAnimationView.frame : CGRect(origin: nextTransitionFromPoint(for: direction), size: size)
             nextAnimationView.frame = isMoving ? nextAnimationView.frame : CGRect(origin: .zero, size: size)
