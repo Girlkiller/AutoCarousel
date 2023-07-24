@@ -307,7 +307,7 @@ extension AutoCarouselView {
         let size = containerView.bounds.size
         if abs(velocity) >= Constants.swipeVelocity {
             let direction: AutoCarouselDirection = velocity > 0 ? .fromLeft : .fromRight
-            startAnimation(direction, shouldRestart: true)
+            startNormalAnimation(direction)
         } else if abs(translation) >= size.width/2 {
             let direction: AutoCarouselDirection = translation > 0 ? .fromLeft : .fromRight
             startNormalAnimation(direction)
@@ -323,7 +323,7 @@ extension AutoCarouselView {
         let size = containerView.bounds.size
         if abs(velocity) >= Constants.swipeVelocity {
             let direction: AutoCarouselDirection = velocity > 0 ? .fromTop : .fromBottom
-            startAnimation(direction, shouldRestart: true)
+            startNormalAnimation(direction)
         } else if abs(translation) >= size.height/2 {
             let direction: AutoCarouselDirection = translation > 0 ? .fromTop : .fromBottom
             startNormalAnimation(direction)
